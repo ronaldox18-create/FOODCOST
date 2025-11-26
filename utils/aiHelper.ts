@@ -1,12 +1,14 @@
 import { GoogleGenAI } from "@google/genai";
 
 const apiKey = process.env.API_KEY;
-const ai = new GoogleGenAI({ apiKey: apiKey });
+
+// Inicializa o cliente apenas se a chave existir
+const ai = apiKey ? new GoogleGenAI({ apiKey: apiKey }) : null;
 
 export const askAI = async (prompt: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
-  if (!apiKey) {
-    console.error("API_KEY is missing");
-    return "Erro: Chave de API não configurada.";
+  if (!apiKey || !ai) {
+    console.error("API_KEY is missing in environment variables.");
+    return "Erro: Chave de API não configurada no sistema (Vercel/Environment).";
   }
 
   try {
@@ -18,6 +20,6 @@ export const askAI = async (prompt: string, model: string = 'gemini-2.5-flash'):
     return response.text || "";
   } catch (error) {
     console.error("AI Request Failed:", error);
-    return "";
+    return "Desculpe, ocorreu um erro ao processar sua solicitação com a IA. Tente novamente em instantes.";
   }
 };
