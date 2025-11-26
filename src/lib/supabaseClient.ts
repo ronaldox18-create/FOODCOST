@@ -1,12 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Usamos process.env aqui porque ele foi injetado pelo vite.config.ts
-// Isso é mais seguro que import.meta.env em alguns ambientes de deploy que causam o erro "undefined"
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+// Credenciais diretas para garantir conexão imediata
+const supabaseUrl = 'https://ifmmqlccvwniiwhxbsau.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmbW1xbGNjdnduaWl3aHhic2F1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxOTMwMTQsImV4cCI6MjA3OTc2OTAxNH0.LQ877b6-z9UgZ2l1XJxnalXs_mnf9HFm_dX7WHktJGo';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("Supabase credentials missing! Check .env or Vercel/Netlify settings.");
-}
-
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
