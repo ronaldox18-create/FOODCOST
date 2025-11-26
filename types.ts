@@ -90,3 +90,16 @@ export interface Order {
   date: string; // ISO Date String
   status: 'pending' | 'completed' | 'canceled';
 }
+
+// --- SAAS & AUTH INTERFACES ---
+
+export type PlanType = 'free' | 'starter' | 'pro';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  storeName: string;
+  plan: PlanType;
+  createdAt: string;
+}

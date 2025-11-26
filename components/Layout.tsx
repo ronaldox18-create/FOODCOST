@@ -1,8 +1,9 @@
 
 import React from 'react';
+import { useAuth } from '../contexts/AuthContext'; // Import Auth
 import { useApp } from '../contexts/AppContext';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBasket, ChefHat, Settings, Menu, Landmark, Users, ClipboardList, Boxes, Sparkles } from 'lucide-react';
+import { LayoutDashboard, ShoppingBasket, ChefHat, Settings, Menu, Landmark, Users, ClipboardList, Boxes, Sparkles, LogOut, User as UserIcon } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -25,6 +26,7 @@ const NavItem = ({ to, icon: Icon, label, active, highlight }: { to: string, ico
 );
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { user, logout } = useAuth(); // Auth hooks
   const { settings } = useApp();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
@@ -38,7 +40,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <ChefHat size={32} />
             <h1 className="text-xl font-bold tracking-tight">FoodCost Pro</h1>
           </div>
-          <p className="text-xs text-gray-400 mt-1 pl-10">{settings.businessName}</p>
+          <div className="mt-4 flex items-center gap-2 text-xs text-gray-500 bg-gray-50 p-2 rounded-lg">
+             <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
+                {user?.name.charAt(0)}
+             </div>
+             <div className="overflow-hidden">
+                <p className="font-bold text-gray-900 truncate">{user?.storeName || settings.businessName}</p>
+                <p className="truncate">{user?.name}</p>
+             </div>
+          </div>
         </div>
         
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
@@ -59,8 +69,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <NavItem to="/settings" icon={Settings} label="Configurações" active={location.pathname === '/settings'} />
         </nav>
 
-        <div className="p-4 border-t border-gray-100 text-center">
-          <p className="text-xs text-gray-400">Versão MVP 1.4 AI</p>
+        <div className="p-4 border-t border-gray-100">
+          <button 
+            onClick={logout}
+            className="flex items-center gap-3 w-full px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
+          >
+            <LogOut size={18} /> Sair da Conta
+          </button>
         </div>
       </aside>
 
@@ -80,6 +95,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Mobile Menu Overlay */}
         {mobileMenuOpen && (
           <div className="absolute top-[60px] left-0 w-full bg-white shadow-lg z-10 p-4 flex flex-col gap-2 md:hidden">
+             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg mb-2">
+                <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
+                    {user?.name.charAt(0)}
+                </div>
+                <div>
+                    <p className="font-bold text-gray-900 text-sm">{user?.storeName}</p>
+                </div>
+            </div>
+
             <NavItem to="/advisor" icon={Sparkles} label="Consultor IA" active={location.pathname === '/advisor'} highlight={true} />
             <NavItem to="/" icon={LayoutDashboard} label="Dashboard" active={location.pathname === '/'} />
             <NavItem to="/orders" icon={ClipboardList} label="Pedidos" active={location.pathname === '/orders'} />
@@ -90,6 +114,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <NavItem to="/ingredients" icon={ShoppingBasket} label="Ingredientes" active={location.pathname === '/ingredients'} />
             <NavItem to="/expenses" icon={Landmark} label="Despesas Fixas" active={location.pathname === '/expenses'} />
             <NavItem to="/settings" icon={Settings} label="Configurações" active={location.pathname === '/settings'} />
+            <button 
+                onClick={logout}
+                className="flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium mt-2"
+            >
+                <LogOut size={20} /> Sair
+            </button>
           </div>
         )}
 
