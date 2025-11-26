@@ -1,35 +1,60 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ChefHat, ArrowRight, Lock, Mail, User, Store } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ChefHat, ArrowRight, Lock, Mail, User, Store, Loader } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Auth: React.FC = () => {
   const { login, register } = useAuth();
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
 
   // Form States
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [storeName, setStoreName] = useState('');
   
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
-    if (isLogin) {
-      const success = login(email);
-      if (!success) {
-        setError('Usuário não encontrado. Verifique o e-mail ou cadastre-se.');
-      }
-    } else {
-      if (!name || !storeName || !email) {
-        setError('Preencha todos os campos.');
-        return;
-      }
-      register(name, email, storeName);
+    try {
+        if (isLogin) {
+            const { success, error } = await login(email, password);
+            if (!success) {
+                setError(error || 'Erro ao fazer login. Verifique suas credenciais.');
+            } else {
+                navigate('/');
+            }
+        } else {
+            if (!name || !storeName || !email || !password) {
+                setError('Preencha todos os campos.');
+                setIsLoading(false);
+                return;
+            }
+            if (password.length < 6) {
+                setError('A senha deve ter pelo menos 6 caracteres.');
+                setIsLoading(false);
+                return;
+            }
+
+            const { success, error } = await register(name, email, password, storeName);
+            if (!success) {
+                setError(error || 'Erro ao criar conta.');
+            } else {
+                // Auto login happens inside AuthContext usually, but session needs to be established
+                // If email confirmation is off, user is logged in.
+                navigate('/');
+            }
+        }
+    } catch (err) {
+        setError('Ocorreu um erro inesperado.');
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -101,7 +126,6 @@ const Auth: React.FC = () => {
               </div>
             </div>
 
-            {/* Simulação de Senha (Visual only for MVP) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
               <div className="relative">
@@ -109,6 +133,8 @@ const Auth: React.FC = () => {
                 <input 
                   type="password" 
                   placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
                   className="w-full pl-10 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
                 />
               </div>
@@ -116,16 +142,21 @@ const Auth: React.FC = () => {
 
             <button 
               type="submit" 
-              className="w-full bg-orange-600 text-white font-bold py-3 rounded-xl hover:bg-orange-700 transition shadow-lg flex items-center justify-center gap-2 mt-2"
+              disabled={isLoading}
+              className="w-full bg-orange-600 text-white font-bold py-3 rounded-xl hover:bg-orange-700 transition shadow-lg flex items-center justify-center gap-2 mt-2 disabled:opacity-70"
             >
-              {isLogin ? 'Entrar no Sistema' : 'Começar Agora'} <ArrowRight size={20} />
+              {isLoading ? <Loader className="animate-spin" /> : (
+                  <>
+                    {isLogin ? 'Entrar no Sistema' : 'Começar Agora'} <ArrowRight size={20} />
+                  </>
+              )}
             </button>
           </form>
 
           <div className="mt-6 text-center text-sm text-gray-500">
             {isLogin ? 'Não tem conta?' : 'Já tem conta?'}
             <button 
-              onClick={() => { setIsLogin(!isLogin); setError(''); }}
+              onClick={() => { setIsLogin(!isLogin); setError(''); setPassword(''); }}
               className="ml-1 text-orange-600 font-bold hover:underline"
             >
               {isLogin ? 'Cadastre-se grátis' : 'Fazer Login'}

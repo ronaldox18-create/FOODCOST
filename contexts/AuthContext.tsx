@@ -1,13 +1,14 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, PlanType } from '../types';
+import { User } from '../types';
+import { supabase } from '../src/lib/supabaseClient';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string) => boolean;
-  register: (name: string, email: string, storeName: string) => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (name: string, email: string, password: string, storeName: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,56 +18,94 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for active session
-    const storedUser = localStorage.getItem('foodcost_current_session');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
-  }, []);
-
-  const login = (email: string): boolean => {
-    // Simulating backend check
-    const usersDbStr = localStorage.getItem('foodcost_users_db');
-    const usersDb: User[] = usersDbStr ? JSON.parse(usersDbStr) : [];
-    
-    const foundUser = usersDb.find(u => u.email === email);
-    
-    if (foundUser) {
-      setUser(foundUser);
-      localStorage.setItem('foodcost_current_session', JSON.stringify(foundUser));
-      return true;
-    }
-    return false;
-  };
-
-  const register = (name: string, email: string, storeName: string) => {
-    const newUser: User = {
-      id: crypto.randomUUID(),
-      name,
-      email,
-      storeName,
-      plan: 'free', // Default plan
-      createdAt: new Date().toISOString()
+    // 1. Check active session on load
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        await fetchUserProfile(session.user.id, session.user.email!);
+      } else {
+        setLoading(false);
+      }
     };
 
-    // Save to "DB"
-    const usersDbStr = localStorage.getItem('foodcost_users_db');
-    const usersDb: User[] = usersDbStr ? JSON.parse(usersDbStr) : [];
-    usersDb.push(newUser);
-    localStorage.setItem('foodcost_users_db', JSON.stringify(usersDb));
+    checkSession();
 
-    // Auto login
-    setUser(newUser);
-    localStorage.setItem('foodcost_current_session', JSON.stringify(newUser));
+    // 2. Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        await fetchUserProfile(session.user.id, session.user.email!);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchUserProfile = async (userId: string, email: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (data) {
+        setUser({
+          id: data.id,
+          name: data.name,
+          email: data.email || email,
+          storeName: data.store_name,
+          plan: data.plan || 'free',
+          createdAt: data.created_at
+        });
+      } else if (error) {
+        console.error("Profile fetch error", error);
+        // Fallback if profile doesn't exist yet (latency)
+        setUser({
+            id: userId,
+            name: 'Usuário',
+            email: email,
+            storeName: 'Minha Loja',
+            plan: 'free',
+            createdAt: new Date().toISOString()
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('foodcost_current_session');
+  const login = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { success: false, error: error.message };
+    return { success: true };
   };
 
-  if (loading) return null;
+  const register = async (name: string, email: string, password: string, storeName: string) => {
+    // Pass extra metadata for the Trigger to create the profile
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+          store_name: storeName
+        }
+      }
+    });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+  };
 
   return (
     <AuthContext.Provider value={{
@@ -74,7 +113,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isAuthenticated: !!user,
       login,
       register,
-      logout
+      logout,
+      loading
     }}>
       {children}
     </AuthContext.Provider>
