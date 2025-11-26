@@ -337,7 +337,7 @@ const Customers: React.FC = () => {
                         Fav: {stats.favoriteDish}
                      </span>
                      <button className="text-orange-600 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                        Ver Detalhes ->
+                        Ver Detalhes &rarr;
                      </button>
                 </div>
               </div>
