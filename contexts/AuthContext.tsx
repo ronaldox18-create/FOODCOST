@@ -21,8 +21,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     // 1. Check active session on load
     const checkSession = async () => {
-      // Supabase v1 uses session() which is synchronous and returns Session | null
-      const session = supabase.auth.session();
+      // Supabase v2 uses getSession() which is asynchronous
+      const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
         await fetchUserProfile(session.user.id, session.user.email!);
@@ -34,8 +34,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkSession();
 
     // 2. Listen for auth changes
-    // Supabase v1 returns { data: Subscription, error }
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         await fetchUserProfile(session.user.id, session.user.email!);
       } else if (event === 'SIGNED_OUT') {
@@ -45,7 +44,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     return () => {
-      authListener?.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -86,23 +85,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const login = async (email: string, password: string) => {
-    // Supabase v1 uses signIn
-    const { error } = await supabase.auth.signIn({ email, password });
+    // Supabase v2 uses signInWithPassword
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { success: false, error: error.message };
     return { success: true };
   };
 
   const register = async (name: string, email: string, password: string, storeName: string) => {
-    // Supabase v1 uses signUp with options as second argument
-    const { error } = await supabase.auth.signUp(
-      { email, password },
-      {
+    // Supabase v2 uses signUp with options object
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
         data: {
           name,
           store_name: storeName
         }
       }
-    );
+    });
 
     if (error) return { success: false, error: error.message };
     return { success: true };
