@@ -2,22 +2,24 @@
 import React from 'react';
 import { useApp } from '../contexts/AppContext';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBasket, ChefHat, Settings, Menu, Landmark, Users, ClipboardList, Boxes } from 'lucide-react';
+import { LayoutDashboard, ShoppingBasket, ChefHat, Settings, Menu, Landmark, Users, ClipboardList, Boxes, Sparkles } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-const NavItem = ({ to, icon: Icon, label, active }: { to: string, icon: any, label: string, active: boolean }) => (
+const NavItem = ({ to, icon: Icon, label, active, highlight }: { to: string, icon: any, label: string, active: boolean, highlight?: boolean }) => (
   <Link
     to={to}
     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
       active 
         ? 'bg-orange-600 text-white shadow-md' 
-        : 'text-gray-600 hover:bg-orange-50 hover:text-orange-600'
+        : highlight 
+            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md hover:opacity-90'
+            : 'text-gray-600 hover:bg-orange-50 hover:text-orange-600'
     }`}
   >
-    <Icon size={20} />
+    <Icon size={20} className={highlight ? "animate-pulse" : ""} />
     <span className="font-medium">{label}</span>
   </Link>
 );
@@ -40,6 +42,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
         
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <NavItem to="/advisor" icon={Sparkles} label="Consultor IA" active={location.pathname === '/advisor'} highlight={true} />
+
           <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-2 mb-1">Gestão</p>
           <NavItem to="/" icon={LayoutDashboard} label="Dashboard" active={location.pathname === '/'} />
           <NavItem to="/orders" icon={ClipboardList} label="Pedidos (PDV)" active={location.pathname === '/orders'} />
@@ -56,7 +60,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </nav>
 
         <div className="p-4 border-t border-gray-100 text-center">
-          <p className="text-xs text-gray-400">Versão MVP 1.3</p>
+          <p className="text-xs text-gray-400">Versão MVP 1.4 AI</p>
         </div>
       </aside>
 
@@ -76,6 +80,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Mobile Menu Overlay */}
         {mobileMenuOpen && (
           <div className="absolute top-[60px] left-0 w-full bg-white shadow-lg z-10 p-4 flex flex-col gap-2 md:hidden">
+            <NavItem to="/advisor" icon={Sparkles} label="Consultor IA" active={location.pathname === '/advisor'} highlight={true} />
             <NavItem to="/" icon={LayoutDashboard} label="Dashboard" active={location.pathname === '/'} />
             <NavItem to="/orders" icon={ClipboardList} label="Pedidos" active={location.pathname === '/orders'} />
             <NavItem to="/customers" icon={Users} label="Clientes" active={location.pathname === '/customers'} />

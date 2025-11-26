@@ -11,6 +11,7 @@ import Settings from './pages/Settings';
 import Customers from './pages/Customers';
 import Orders from './pages/Orders';
 import Inventory from './pages/Inventory';
+import Advisor from './pages/Advisor';
 
 const App: React.FC = () => {
   return (
@@ -19,6 +20,7 @@ const App: React.FC = () => {
         <Layout>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/advisor" element={<Advisor />} />
             <Route path="/ingredients" element={<Ingredients />} />
             <Route path="/products" element={<Products />} />
             <Route path="/inventory" element={<Inventory />} />

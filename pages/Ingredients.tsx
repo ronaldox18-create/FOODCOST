@@ -2,8 +2,9 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { Ingredient, UnitType } from '../types';
-import { Plus, Trash2, Edit2, Search, AlertTriangle, Info, ArrowUpDown, ArrowUp, ArrowDown, Package } from 'lucide-react';
+import { Plus, Trash2, Edit2, Search, AlertTriangle, Info, ArrowUpDown, ArrowUp, ArrowDown, Package, Sparkles, Loader } from 'lucide-react';
 import { formatCurrency } from '../utils/calculations';
+import { askAI } from '../utils/aiHelper';
 
 type SortField = 'name' | 'purchasePrice' | 'realCost' | 'yieldPercent';
 type SortDirection = 'asc' | 'desc';
@@ -17,6 +18,9 @@ const Ingredients: React.FC = () => {
   // Sorting state
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  
+  // AI State
+  const [isAiLoading, setIsAiLoading] = useState(false);
   
   // Estado para confirmação de exclusão
   const [deleteConfirmation, setDeleteConfirmation] = useState<{id: string, name: string} | null>(null);
@@ -36,6 +40,23 @@ const Ingredients: React.FC = () => {
       setSortField(field);
       setSortDirection('asc');
     }
+  };
+
+  const handleAiYieldEstimate = async () => {
+    if (!formData.name) return;
+    setIsAiLoading(true);
+    
+    const prompt = `Estime a porcentagem média de aproveitamento (Yield) do ingrediente culinário "${formData.name}" após limpeza/descasque. Responda APENAS com o número (ex: 85). Se for um produto industrializado (lata, pacote), responda 100.`;
+    
+    const result = await askAI(prompt);
+    const num = parseInt(result.replace(/[^0-9]/g, ''));
+    
+    if (!isNaN(num) && num > 0 && num <= 100) {
+      setFormData(prev => ({ ...prev, yieldPercent: num }));
+    } else {
+      alert("Não foi possível estimar automaticamente. Por favor, insira manualmente.");
+    }
+    setIsAiLoading(false);
   };
 
   const processedIngredients = useMemo(() => {
@@ -329,12 +350,23 @@ const Ingredients: React.FC = () => {
                     </div>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1 group relative cursor-help">
-                        Yield (%) <Info size={14} className="text-gray-400" />
-                        <span className="invisible group-hover:visible absolute bottom-6 left-1/2 -translate-x-1/2 w-48 bg-gray-800 text-white text-xs p-2 rounded shadow-lg z-10 text-center">
-                            Porcentagem aproveitável após limpeza/descasque. Ex: Batata = 85%.
-                        </span>
-                    </label>
+                    <div className="flex justify-between items-center mb-1">
+                        <label className="text-sm font-medium text-gray-700 flex items-center gap-1 cursor-help group relative">
+                            Yield (%) <Info size={14} className="text-gray-400" />
+                            <span className="invisible group-hover:visible absolute bottom-6 left-1/2 -translate-x-1/2 w-48 bg-gray-800 text-white text-xs p-2 rounded shadow-lg z-10 text-center">
+                                Porcentagem aproveitável após limpeza/descasque. Ex: Batata = 85%.
+                            </span>
+                        </label>
+                        <button 
+                            type="button" 
+                            onClick={handleAiYieldEstimate}
+                            disabled={!formData.name || isAiLoading}
+                            className="text-[10px] flex items-center gap-1 text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 hover:bg-purple-100 disabled:opacity-50"
+                        >
+                            {isAiLoading ? <Loader size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                            Auto-Estimar
+                        </button>
+                    </div>
                     <div className="relative">
                         <input 
                         required 

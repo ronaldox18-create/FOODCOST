@@ -50,6 +50,7 @@ const SEED_PRODUCTS: Product[] = [
     id: 'prod-1',
     name: 'Smash Burger',
     category: 'Lanches',
+    description: 'Delicioso smash burger com crosta perfeita, queijo cheddar derretido e nosso molho especial no pão brioche.',
     currentPrice: 20.00,
     preparationMethod: '1. Selar pão na manteiga.\n2. Esmagar carne (smash) na chapa bem quente.\n3. Adicionar sal e pimenta.\n4. Virar, colocar queijo e abafar.\n5. Montar: Pão, Molho, Carne+Queijo, Pão.',
     recipe: [
@@ -64,6 +65,7 @@ const SEED_PRODUCTS: Product[] = [
     id: 'prod-2',
     name: 'X-Salada Clássico',
     category: 'Lanches',
+    description: 'O clássico que nunca sai de moda: hambúrguer suculento, queijo, alface crocante, tomate fresquinho e maionese artesanal.',
     currentPrice: 26.00,
     preparationMethod: '1. Grelhar hambúrguer de 160g ao ponto.\n2. Derreter queijo cheddar.\n3. Montar: Pão, Maionese, Alface picada, Tomate (2 fatias), Carne+Queijo.',
     recipe: [
@@ -80,6 +82,7 @@ const SEED_PRODUCTS: Product[] = [
     id: 'prod-3',
     name: 'X-Bacon Supremo',
     category: 'Lanches',
+    description: 'Para os amantes de bacon! Muito bacon crocante, carne 160g e queijo cheddar.',
     currentPrice: 32.00,
     preparationMethod: '1. Fritar bacon até ficar crocante.\n2. Grelhar carne 160g.\n3. Montar com bastante maionese da casa.',
     recipe: [
@@ -95,6 +98,7 @@ const SEED_PRODUCTS: Product[] = [
     id: 'prod-4',
     name: 'Batata Frita (M)',
     category: 'Porções',
+    description: 'Porção generosa de batatas fritas crocantes e sequinhas.',
     currentPrice: 18.00,
     preparationMethod: 'Fritar a 180°C por 4 minutos. Escorrer bem e salgar.',
     recipe: [
@@ -106,6 +110,7 @@ const SEED_PRODUCTS: Product[] = [
     id: 'prod-5',
     name: 'Refrigerante Lata',
     category: 'Bebidas',
+    description: 'Lata 350ml gelada.',
     currentPrice: 6.00,
     recipe: [
       { ingredientId: 'ing-9', quantityUsed: 1, unitUsed: 'un' },

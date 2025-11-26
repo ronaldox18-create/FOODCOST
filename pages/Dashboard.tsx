@@ -1,10 +1,11 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { calculateProductMetrics, formatCurrency, formatPercent } from '../utils/calculations';
+import { askAI } from '../utils/aiHelper';
 import { 
     TrendingUp, DollarSign, ShoppingBag, PieChart, 
-    ArrowRight, Activity, Calendar, Wallet 
+    ArrowRight, Activity, Calendar, Wallet, Sparkles, Lightbulb, Target, Trophy
 } from 'lucide-react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, 
@@ -12,10 +13,17 @@ import {
 } from 'recharts';
 import { Link } from 'react-router-dom';
 
-const StatCard = ({ title, value, subtext, icon: Icon, colorClass, trend }: any) => (
-  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-start justify-between relative overflow-hidden group">
+const StatCard = ({ title, value, subtext, icon: Icon, colorClass, trend, aiBadge }: any) => (
+  <div className={`bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-start justify-between relative overflow-hidden group ${aiBadge ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
     <div className="relative z-10">
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
+      <div className="flex items-center gap-2 mb-1">
+          <p className="text-sm font-medium text-gray-500">{title}</p>
+          {aiBadge && (
+              <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <Sparkles size={8} /> IA
+              </span>
+          )}
+      </div>
       <h3 className="text-2xl font-bold text-gray-900 tracking-tight">{value}</h3>
       {subtext && (
           <div className="flex items-center gap-1 mt-2">
@@ -52,6 +60,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 const Dashboard: React.FC = () => {
   const { products, ingredients, fixedCosts, settings, orders } = useApp();
+  const [dailyInsight, setDailyInsight] = useState<string>('');
+  const [revenueForecast, setRevenueForecast] = useState<number | null>(null);
 
   // --- 1. METRICS CALCULATION ---
   const kpis = useMemo(() => {
@@ -117,6 +127,12 @@ const Dashboard: React.FC = () => {
         return { name: day, Vendas: dayTotal };
     });
 
+    // Goal Progress
+    const goalPercent = Math.min(100, (salesMonth / settings.estimatedMonthlyBilling) * 100);
+    const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+    const currentDay = new Date().getDate();
+    const monthProgressPercent = (currentDay / daysInMonth) * 100;
+
     return { 
         salesToday, 
         salesMonth, 
@@ -125,9 +141,70 @@ const Dashboard: React.FC = () => {
         costStructureData,
         topProductsData,
         salesTrendData,
-        recentOrders: orders.slice(0, 5) // Last 5
+        recentOrders: orders.slice(0, 5), // Last 5
+        goalPercent,
+        monthProgressPercent
     };
   }, [products, ingredients, fixedCosts, settings, orders]);
+
+  // AI Daily Insight & Forecast Effect
+  useEffect(() => {
+    const fetchData = async () => {
+        const storedDate = localStorage.getItem('foodcost_insight_date');
+        const today = new Date().toDateString();
+        const storedInsight = localStorage.getItem('foodcost_daily_insight');
+        const storedForecast = localStorage.getItem('foodcost_revenue_forecast');
+
+        // Restore if valid today
+        if (storedDate === today) {
+            if (storedInsight) setDailyInsight(storedInsight);
+            if (storedForecast) setRevenueForecast(parseFloat(storedForecast));
+            return;
+        }
+
+        // Only run prompts if we have products
+        if (products.length === 0) return;
+
+        // --- 1. Daily Insight ---
+        const insightPrompt = `Analise estes dados de restaurante e me dê APENAS UMA dica curta e valiosa (máximo 15 palavras) para o dono melhorar o lucro hoje. 
+        Dados: Vendas Hoje: R$ ${kpis.salesToday}, Ticket Médio: R$ ${kpis.ticketAvg}, Produto Top Margem: ${kpis.topProductsData[0]?.name || 'N/A'}.`;
+        
+        const insightResult = await askAI(insightPrompt);
+        if (insightResult) {
+            setDailyInsight(insightResult);
+            localStorage.setItem('foodcost_daily_insight', insightResult);
+        }
+
+        // --- 2. Revenue Forecast ---
+        if (orders.length > 0) {
+            const last7DaysValues = kpis.salesTrendData.map(d => d.Vendas);
+            const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+            const currentDay = new Date().getDate();
+            const monthTotalSoFar = kpis.salesMonth;
+
+            const forecastPrompt = `Atue como um estatístico financeiro.
+            Dados de Vendas dos últimos 7 dias: [${last7DaysValues.join(', ')}].
+            Faturamento acumulado deste mês (Dia ${currentDay}/${daysInMonth}): R$ ${monthTotalSoFar}.
+            
+            TAREFA: Estime com base na tendência qual será o Faturamento Total no final deste mês.
+            Considere sazonalidade simples (média ponderada).
+            Retorne APENAS o número (ex: 15400.00). Use ponto para decimais.`;
+
+            const forecastResult = await askAI(forecastPrompt);
+            const forecastNum = parseFloat(forecastResult.replace(/[^0-9.]/g, ''));
+            
+            if (!isNaN(forecastNum) && forecastNum > 0) {
+                setRevenueForecast(forecastNum);
+                localStorage.setItem('foodcost_revenue_forecast', forecastNum.toString());
+            }
+        }
+
+        // Update timestamp
+        localStorage.setItem('foodcost_insight_date', today);
+    };
+    
+    fetchData();
+  }, [kpis, orders, products.length]);
 
   return (
     <div className="space-y-6">
@@ -147,16 +224,23 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* AI Daily Insight */}
+      {dailyInsight && (
+          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-4 text-white shadow-lg flex items-center gap-4 animate-in fade-in slide-in-from-top-4">
+              <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
+                  <Sparkles size={24} className="text-yellow-300" />
+              </div>
+              <div className="flex-1">
+                  <p className="text-xs font-bold text-purple-100 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Lightbulb size={12} /> Insight do Dia (IA)
+                  </p>
+                  <p className="font-medium text-white text-sm md:text-base">"{dailyInsight}"</p>
+              </div>
+          </div>
+      )}
+
       {/* KPI Grid - Real Data */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Vendas Hoje" 
-          value={formatCurrency(kpis.salesToday)} 
-          subtext="Caixa diário atual"
-          icon={Wallet} 
-          trend="up"
-          colorClass="text-green-600"
-        />
         <StatCard 
           title="Faturamento Mês" 
           value={formatCurrency(kpis.salesMonth)} 
@@ -164,6 +248,28 @@ const Dashboard: React.FC = () => {
           icon={Calendar} 
           colorClass="text-blue-600"
         />
+        
+        {/* AI Forecast Card */}
+        {revenueForecast ? (
+             <StatCard 
+             title="Projeção (Fim do Mês)" 
+             value={formatCurrency(revenueForecast)} 
+             subtext={revenueForecast > kpis.salesMonth ? "Tendência de Alta" : "Meta Próxima"}
+             icon={Target} 
+             trend="up"
+             colorClass="text-indigo-600"
+             aiBadge={true}
+           />
+        ) : (
+            <StatCard 
+            title="Vendas Hoje" 
+            value={formatCurrency(kpis.salesToday)} 
+            subtext="Caixa diário atual"
+            icon={Wallet} 
+            colorClass="text-green-600"
+          />
+        )}
+
         <StatCard 
           title="Ticket Médio" 
           value={formatCurrency(kpis.ticketAvg)} 
@@ -180,37 +286,94 @@ const Dashboard: React.FC = () => {
         />
       </div>
 
-      {/* Main Charts Row */}
+      {/* Goal & Trend Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Goal Progress Chart */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+              <div>
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <Trophy size={20} className="text-yellow-500" />
+                      Meta de Faturamento
+                  </h3>
+                  <p className="text-sm text-gray-500">Progresso vs Estimado ({formatCurrency(settings.estimatedMonthlyBilling)})</p>
+              </div>
+
+              <div className="mt-6">
+                  <div className="flex justify-between items-end mb-2">
+                      <span className="text-3xl font-bold text-gray-900">{kpis.goalPercent.toFixed(1)}%</span>
+                      <span className="text-sm font-medium text-gray-500">do objetivo</span>
+                  </div>
+                  
+                  {/* Progress Bar Container */}
+                  <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden w-full">
+                      {/* Actual Progress */}
+                      <div 
+                        className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 ${
+                            kpis.goalPercent >= 100 ? 'bg-green-500' : 
+                            kpis.goalPercent >= kpis.monthProgressPercent ? 'bg-blue-500' : 'bg-orange-500'
+                        }`}
+                        style={{ width: `${kpis.goalPercent}%` }}
+                      ></div>
+                      
+                      {/* Time Marker (Where we should be ideally) */}
+                      <div 
+                        className="absolute top-0 h-full w-0.5 bg-gray-400 z-10"
+                        style={{ left: `${kpis.monthProgressPercent}%` }}
+                        title="Dia atual"
+                      ></div>
+                  </div>
+                  
+                  <div className="flex justify-between text-xs text-gray-400 mt-2">
+                      <span>R$ 0</span>
+                      <span className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full bg-gray-400"></div> 
+                          Hoje ({Math.round(kpis.monthProgressPercent)}%)
+                      </span>
+                      <span>{formatCurrency(settings.estimatedMonthlyBilling)}</span>
+                  </div>
+
+                  <div className="mt-4 bg-gray-50 p-3 rounded-lg text-xs text-gray-600 border border-gray-100">
+                      {kpis.goalPercent >= kpis.monthProgressPercent 
+                        ? "🚀 Ótimo! Você está vendendo acima do ritmo necessário para bater a meta."
+                        : "⚠️ Atenção: As vendas estão um pouco abaixo do ritmo ideal para o dia do mês."
+                      }
+                  </div>
+              </div>
+          </div>
+
+          {/* Sales Trend Chart */}
+          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
+              <div className="mb-6">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <TrendingUp size={20} className="text-blue-600" />
+                      Evolução de Vendas
+                  </h3>
+                  <p className="text-sm text-gray-500">Faturamento dos últimos 7 dias.</p>
+              </div>
+              <div className="flex-1 min-h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={kpis.salesTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                          <defs>
+                              <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#ea580c" stopOpacity={0.2}/>
+                                  <stop offset="95%" stopColor="#ea580c" stopOpacity={0}/>
+                              </linearGradient>
+                          </defs>
+                          <XAxis dataKey="name" tick={{fontSize: 12}} axisLine={false} tickLine={false} />
+                          <YAxis tickFormatter={(val) => `R$${val}`} tick={{fontSize: 12}} axisLine={false} tickLine={false} />
+                          <CartesianGrid vertical={false} stroke="#f3f4f6" />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Area type="monotone" dataKey="Vendas" stroke="#ea580c" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
+                      </AreaChart>
+                  </ResponsiveContainer>
+              </div>
+          </div>
+      </div>
+
+      {/* Cost Structure & Top Performers */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Sales Trend */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
-            <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <TrendingUp size={20} className="text-blue-600" />
-                    Evolução de Vendas
-                </h3>
-                <p className="text-sm text-gray-500">Faturamento dos últimos 7 dias.</p>
-            </div>
-            <div className="flex-1 min-h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={kpis.salesTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                        <defs>
-                            <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#ea580c" stopOpacity={0.2}/>
-                                <stop offset="95%" stopColor="#ea580c" stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
-                        <XAxis dataKey="name" tick={{fontSize: 12}} axisLine={false} tickLine={false} />
-                        <YAxis tickFormatter={(val) => `R$${val}`} tick={{fontSize: 12}} axisLine={false} tickLine={false} />
-                        <CartesianGrid vertical={false} stroke="#f3f4f6" />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Area type="monotone" dataKey="Vendas" stroke="#ea580c" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-
         {/* Cost Structure Pie Chart */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
             <div className="mb-2">
@@ -245,26 +408,22 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
         </div>
-      </div>
 
-      {/* Secondary Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
         {/* Top Performers */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
             <div className="mb-4 flex justify-between items-center">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-900">Melhores Margens</h3>
+                    <h3 className="text-lg font-bold text-gray-900">Campeões de Margem</h3>
                     <p className="text-sm text-gray-500">Produtos que geram mais lucro %.</p>
                 </div>
                 <Link to="/products" className="text-xs font-bold text-orange-600 hover:underline">Ver Cardápio</Link>
             </div>
-            <div className="h-[250px]">
+            <div className="flex-1 min-h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={kpis.topProductsData} layout="vertical" margin={{ top: 0, right: 30, left: 40, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                         <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12, fontWeight: 500}} />
+                        <YAxis dataKey="name" type="category" width={120} tick={{fontSize: 12, fontWeight: 500}} />
                         <Tooltip cursor={{fill: 'transparent'}} content={({ active, payload }) => {
                              if (active && payload && payload.length) {
                                 return (
@@ -276,14 +435,17 @@ const Dashboard: React.FC = () => {
                              }
                              return null;
                         }} />
-                        <Bar dataKey="margin" radius={[0, 4, 4, 0]} barSize={20} fill="#16a34a" background={{ fill: '#f3f4f6' }} />
+                        <Bar dataKey="margin" radius={[0, 4, 4, 0]} barSize={24} fill="#16a34a" background={{ fill: '#f3f4f6' }}>
+                             <ReferenceLine x={settings.targetMargin} stroke="red" strokeDasharray="3 3" label="Meta" />
+                        </Bar>
                     </BarChart>
                 </ResponsiveContainer>
             </div>
         </div>
+      </div>
 
-        {/* Recent Orders Feed */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+      {/* Recent Orders Feed */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <div className="mb-4 flex justify-between items-center">
                 <div>
                     <h3 className="text-lg font-bold text-gray-900">Últimos Pedidos</h3>
@@ -296,7 +458,7 @@ const Dashboard: React.FC = () => {
                 {kpis.recentOrders.length === 0 ? (
                     <div className="text-center py-10 text-gray-400">
                         <ShoppingBag className="mx-auto mb-2 opacity-20" size={32} />
-                        <p>Nenhuma venda registrada.</p>
+                        <p>Nenhum venda registrada.</p>
                     </div>
                 ) : (
                     kpis.recentOrders.map(order => (
@@ -327,8 +489,6 @@ const Dashboard: React.FC = () => {
                 )}
             </div>
         </div>
-
-      </div>
     </div>
   );
 };

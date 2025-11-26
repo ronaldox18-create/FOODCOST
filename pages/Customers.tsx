@@ -2,10 +2,17 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { Customer, Order } from '../types';
-import { Plus, Search, MessageCircle, User, MapPin, Edit2, Trash2, Calendar, DollarSign, Gift, TrendingUp, Clock, ShoppingBag } from 'lucide-react';
+import { Plus, Search, MessageCircle, User, MapPin, Edit2, Trash2, Calendar, DollarSign, Gift, TrendingUp, Clock, ShoppingBag, Sparkles, Brain, Loader, Wand2, Copy, Check } from 'lucide-react';
 import { formatCurrency } from '../utils/calculations';
+import { askAI } from '../utils/aiHelper';
 
 type FilterTab = 'all' | 'vip' | 'missing' | 'birthdays';
+
+interface AiProfile {
+    persona: string;
+    tags: string[];
+    strategy: string;
+}
 
 const Customers: React.FC = () => {
   const { customers, orders, addCustomer, updateCustomer, deleteCustomer } = useApp();
@@ -19,6 +26,13 @@ const Customers: React.FC = () => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  
+  // AI States
+  const [aiProfile, setAiProfile] = useState<AiProfile | null>(null);
+  const [isAnalyzingProfile, setIsAnalyzingProfile] = useState(false);
+  const [generatedMessage, setGeneratedMessage] = useState('');
+  const [isGeneratingMessage, setIsGeneratingMessage] = useState(false);
+  const [messageCopied, setMessageCopied] = useState(false);
   
   // Form State
   const [formData, setFormData] = useState<Omit<Customer, 'id' | 'totalSpent' | 'lastOrderDate'>>({
@@ -53,6 +67,80 @@ const Customers: React.FC = () => {
         .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Nenhum';
 
     return { totalOrders, ticketAvg, favoriteDish, history: customerOrders };
+  };
+
+  // --- AI HANDLERS ---
+
+  const handleAnalyzeProfile = async (customer: Customer) => {
+      setIsAnalyzingProfile(true);
+      const stats = getCustomerStats(customer.id);
+      
+      const ordersSummary = stats.history.slice(0, 10).map(o => 
+        `${new Date(o.date).toLocaleDateString()}: ${o.items.map(i => i.productName).join(', ')} (${formatCurrency(o.totalAmount)})`
+      ).join('\n');
+
+      const prompt = `Atue como um Especialista em CRM de Restaurantes.
+      Analise o seguinte histórico de cliente e crie um perfil comportamental.
+      
+      CLIENTE: ${customer.name}
+      TICKET MÉDIO: ${formatCurrency(stats.ticketAvg)}
+      PRATO FAVORITO: ${stats.favoriteDish}
+      HISTÓRICO RECENTE:
+      ${ordersSummary}
+      
+      TAREFA: Retorne um JSON puro (sem markdown) com:
+      {
+        "persona": "Um título curto (ex: Amante de Bacon, Econômico, VIP de Fim de Semana)",
+        "tags": ["3 tags curtas de comportamento"],
+        "strategy": "Uma frase de estratégia para vender mais para ele"
+      }`;
+
+      try {
+          const result = await askAI(prompt);
+          const cleanJson = result.replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanJson);
+          setAiProfile(parsed);
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setIsAnalyzingProfile(false);
+      }
+  };
+
+  const handleGenerateMessage = async (customer: Customer, type: 'missing' | 'promo' | 'casual') => {
+      setIsGeneratingMessage(true);
+      const stats = getCustomerStats(customer.id);
+      const daysSince = Math.floor((new Date().getTime() - new Date(customer.lastOrderDate).getTime()) / (1000 * 3600 * 24));
+
+      let context = "";
+      if (type === 'missing') context = `O cliente não vem há ${daysSince} dias. Foco em saudade e retorno.`;
+      if (type === 'promo') context = "Queremos oferecer 10% de desconto no próximo pedido para movimentar.";
+      if (type === 'casual') context = "Apenas manter relacionamento, perguntar se gostou do último pedido.";
+
+      const prompt = `Atue como um Copywriter de Restaurante.
+      Escreva uma mensagem de WhatsApp curta, persuasiva e humanizada (com emojis).
+      
+      PARA: ${customer.name}
+      PRATO FAVORITO: ${stats.favoriteDish}
+      CONTEXTO: ${context}
+      
+      Regras: Não use linguagem robótica. Seja direto. Inclua uma 'Chamada para Ação' (CTA).
+      Retorne APENAS o texto da mensagem.`;
+
+      const result = await askAI(prompt);
+      setGeneratedMessage(result);
+      setIsGeneratingMessage(false);
+  };
+
+  const copyToClipboard = () => {
+      navigator.clipboard.writeText(generatedMessage);
+      setMessageCopied(true);
+      setTimeout(() => setMessageCopied(false), 2000);
+  };
+
+  const sendToWhatsApp = (phone: string) => {
+      const numbers = phone.replace(/\D/g, '');
+      window.open(`https://wa.me/55${numbers}?text=${encodeURIComponent(generatedMessage)}`, '_blank');
   };
 
   // --- FILTER LOGIC ---
@@ -128,6 +216,8 @@ const Customers: React.FC = () => {
 
   const openDetailsModal = (c: Customer) => {
     setSelectedCustomer(c);
+    setAiProfile(null); // Reset AI
+    setGeneratedMessage('');
     setIsDetailsModalOpen(true);
   };
 
@@ -135,24 +225,6 @@ const Customers: React.FC = () => {
     setIsEditModalOpen(false);
     setIsDetailsModalOpen(false);
     setSelectedCustomer(null);
-  };
-
-  const openWhatsApp = (phone: string, type: 'birthday' | 'missing' | 'general' = 'general', customerName: string) => {
-    const numbers = phone.replace(/\D/g, '');
-    let text = '';
-    
-    switch (type) {
-        case 'birthday':
-            text = `Olá ${customerName}! 🎂 Feliz aniversário! Que tal comemorar com a gente hoje? Temos uma surpresa pra você!`;
-            break;
-        case 'missing':
-            text = `Oi ${customerName}! 🍔 Faz tempo que não te vemos por aqui. Estamos com saudade! Segue nosso cardápio atualizado...`;
-            break;
-        default:
-            text = `Olá ${customerName}, tudo bem?`;
-    }
-
-    window.open(`https://wa.me/55${numbers}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleDelete = (id: string) => {
@@ -284,49 +356,96 @@ const Customers: React.FC = () => {
       {/* --- MODAL DETALHES + HISTÓRICO + CRM --- */}
       {isDetailsModalOpen && selectedCustomer && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-           <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[85vh] flex overflow-hidden">
+           <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl h-[90vh] flex overflow-hidden">
               
               {/* Coluna Esquerda: Perfil e Ações */}
-              <div className="w-1/3 bg-gray-50 p-6 border-r border-gray-200 flex flex-col">
+              <div className="w-1/3 bg-gray-50 p-6 border-r border-gray-200 flex flex-col overflow-y-auto custom-scrollbar">
                   <div className="text-center mb-6">
                       <div className="w-20 h-20 bg-white border-2 border-orange-100 rounded-full flex items-center justify-center text-2xl font-bold text-orange-600 mx-auto mb-3 shadow-sm">
                           {selectedCustomer.name.charAt(0)}
                       </div>
                       <h3 className="text-xl font-bold text-gray-900">{selectedCustomer.name}</h3>
                       <p className="text-sm text-gray-500">{selectedCustomer.phone}</p>
-                      {selectedCustomer.email && <p className="text-xs text-gray-400">{selectedCustomer.email}</p>}
                   </div>
 
-                  <div className="space-y-4 flex-1 overflow-y-auto">
-                      <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Ações Rápidas (WhatsApp)</p>
-                          <div className="space-y-2">
+                  {/* AI PROFILE CARD */}
+                  <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-4 rounded-xl text-white shadow-md mb-6 relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition">
+                          <Brain size={48} />
+                      </div>
+                      <h4 className="font-bold text-sm flex items-center gap-2 mb-3">
+                          <Sparkles size={14} className="text-yellow-300" /> Perfil Comportamental
+                      </h4>
+                      
+                      {!aiProfile ? (
+                          <div className="text-center py-4">
+                              <p className="text-xs text-indigo-200 mb-3">Descubra quem é este cliente.</p>
                               <button 
-                                onClick={() => openWhatsApp(selectedCustomer.phone, 'general', selectedCustomer.name)}
-                                className="w-full flex items-center gap-2 text-sm text-gray-700 hover:bg-gray-50 p-2 rounded transition border border-gray-100"
+                                onClick={() => handleAnalyzeProfile(selectedCustomer)}
+                                disabled={isAnalyzingProfile}
+                                className="w-full bg-white/20 hover:bg-white/30 text-white text-xs font-bold py-2 rounded-lg transition flex items-center justify-center gap-2"
                               >
-                                  <MessageCircle size={16} className="text-green-500" /> Conversar
+                                  {isAnalyzingProfile ? <Loader size={12} className="animate-spin" /> : <Brain size={12} />}
+                                  {isAnalyzingProfile ? 'Analisando...' : 'Analisar com IA'}
                               </button>
-                              
-                              {/* Contextual Actions */}
-                              {(selectedCustomer.birthDate && new Date(selectedCustomer.birthDate).getMonth() === new Date().getMonth()) && (
-                                  <button 
-                                    onClick={() => openWhatsApp(selectedCustomer.phone, 'birthday', selectedCustomer.name)}
-                                    className="w-full flex items-center gap-2 text-sm text-blue-700 bg-blue-50 hover:bg-blue-100 p-2 rounded transition"
-                                  >
-                                      <Gift size={16} /> Dar Parabéns
-                                  </button>
-                              )}
-
-                              {(Math.floor((new Date().getTime() - new Date(selectedCustomer.lastOrderDate).getTime()) / (1000 * 3600 * 24)) > 30) && (
-                                  <button 
-                                    onClick={() => openWhatsApp(selectedCustomer.phone, 'missing', selectedCustomer.name)}
-                                    className="w-full flex items-center gap-2 text-sm text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded transition"
-                                  >
-                                      <Clock size={16} /> Recuperar Cliente
-                                  </button>
-                              )}
                           </div>
+                      ) : (
+                          <div className="animate-in fade-in zoom-in duration-300">
+                              <p className="text-lg font-bold text-white mb-2">{aiProfile.persona}</p>
+                              <div className="flex flex-wrap gap-1 mb-3">
+                                  {aiProfile.tags.map(tag => (
+                                      <span key={tag} className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">{tag}</span>
+                                  ))}
+                              </div>
+                              <div className="bg-black/20 p-2 rounded text-xs text-indigo-100 italic border border-white/10">
+                                  "{aiProfile.strategy}"
+                              </div>
+                          </div>
+                      )}
+                  </div>
+
+                  <div className="space-y-4">
+                      {/* AI MESSAGING */}
+                      <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                              <Wand2 size={12} /> Mensagem Inteligente
+                          </p>
+                          
+                          <div className="grid grid-cols-3 gap-2 mb-3">
+                              <button onClick={() => handleGenerateMessage(selectedCustomer, 'promo')} className="text-[10px] bg-green-50 text-green-700 py-1.5 rounded border border-green-100 hover:bg-green-100">Promoção</button>
+                              <button onClick={() => handleGenerateMessage(selectedCustomer, 'missing')} className="text-[10px] bg-red-50 text-red-700 py-1.5 rounded border border-red-100 hover:bg-red-100">Sumido</button>
+                              <button onClick={() => handleGenerateMessage(selectedCustomer, 'casual')} className="text-[10px] bg-blue-50 text-blue-700 py-1.5 rounded border border-blue-100 hover:bg-blue-100">Casual</button>
+                          </div>
+
+                          {isGeneratingMessage ? (
+                              <div className="text-center py-4 text-gray-400 text-xs">
+                                  <Loader size={16} className="animate-spin mx-auto mb-1" />
+                                  Escrevendo...
+                              </div>
+                          ) : generatedMessage && (
+                              <div className="animate-in fade-in slide-in-from-top-2">
+                                  <textarea 
+                                    className="w-full text-xs p-2 bg-gray-50 rounded border border-gray-200 text-gray-700 mb-2 resize-none h-24 focus:ring-2 focus:ring-orange-500 outline-none"
+                                    value={generatedMessage}
+                                    onChange={(e) => setGeneratedMessage(e.target.value)}
+                                  />
+                                  <div className="flex gap-2">
+                                      <button 
+                                        onClick={() => sendToWhatsApp(selectedCustomer.phone)}
+                                        className="flex-1 bg-green-500 text-white text-xs font-bold py-2 rounded hover:bg-green-600 transition flex items-center justify-center gap-1"
+                                      >
+                                          <MessageCircle size={14} /> Enviar Zap
+                                      </button>
+                                      <button 
+                                        onClick={copyToClipboard}
+                                        className="bg-gray-100 text-gray-600 p-2 rounded hover:bg-gray-200 transition"
+                                        title="Copiar Texto"
+                                      >
+                                          {messageCopied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+                                      </button>
+                                  </div>
+                              </div>
+                          )}
                       </div>
 
                       <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
@@ -342,17 +461,11 @@ const Customers: React.FC = () => {
                                    <span className="text-gray-500 block text-xs">Endereço</span>
                                    <span className="text-gray-900">{selectedCustomer.address || '-'}</span>
                                </div>
-                               <div>
-                                   <span className="text-gray-500 block text-xs">Obs</span>
-                                   <p className="text-gray-900 italic bg-yellow-50 p-2 rounded text-xs mt-1 border border-yellow-100">
-                                       {selectedCustomer.notes || 'Nenhuma observação.'}
-                                   </p>
-                               </div>
                            </div>
                       </div>
                   </div>
 
-                  <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                  <div className="mt-auto pt-4 border-t border-gray-200 flex gap-2">
                       <button 
                         onClick={() => {setIsDetailsModalOpen(false); openEditModal(selectedCustomer);}}
                         className="flex-1 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-white"

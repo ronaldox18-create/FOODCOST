@@ -22,6 +22,7 @@ export interface Product {
   id: string;
   name: string;
   category: string;
+  description?: string; // Novo: Texto de marketing para cardápio/delivery
   currentPrice: number;
   recipe: RecipeItem[];
   preparationMethod?: string; // Novo campo: Modo de Preparo
