@@ -309,7 +309,7 @@ const Products: React.FC = () => {
                         <span>{formatCurrency(metrics.costIngredients)}</span>
                     </div>
                     <div className="flex justify-between text-gray-500">
-                        <span className="flex items-center gap-1">Custos Fixos <Info size={12} title="Rateio baseado no faturamento"/>:</span>
+                        <span className="flex items-center gap-1">Custos Fixos <span title="Rateio baseado no faturamento"><Info size={12} /></span>:</span>
                         <span>{formatCurrency(metrics.costFixed)}</span>
                     </div>
                      <div className="flex justify-between text-gray-500">
