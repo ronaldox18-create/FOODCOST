@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { calculateProductMetrics, formatCurrency } from '../utils/calculations';
-import { GoogleGenAI } from "@google/genai";
+import { askAI } from '../utils/aiHelper'; // Importando a função segura
 import { Sparkles, Send, Bot, User, AlertTriangle, Lightbulb, TrendingUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -91,7 +91,6 @@ const Advisor: React.FC = () => {
     setIsLoading(true);
 
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const contextData = generateContextData();
         
         const systemPrompt = `
@@ -109,19 +108,17 @@ const Advisor: React.FC = () => {
         5. Analise os dados fornecidos para identificar "Pratos Estrela" (alto lucro/alta venda) e "Pratos Cão" (baixo lucro/baixa venda).
 
         Exemplo de resposta boa: "Seu X-Bacon tem margem negativa (-2%). Aumente o preço para R$ 34,00 ou reduza 20g de bacon."
+        
+        Pergunta do usuário: ${text}
         `;
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [
-                { role: 'user', parts: [{ text: systemPrompt + "\n\nPergunta do usuário: " + text }] }
-            ]
-        });
+        // Usando a função utilitária askAI que já trata a chave corretamente
+        const responseText = await askAI(systemPrompt);
 
         const aiMsg: Message = {
             id: crypto.randomUUID(),
             role: 'model',
-            content: response.text || "Desculpe, não consegui analisar isso agora.",
+            content: responseText || "Desculpe, não consegui analisar isso agora.",
             timestamp: new Date()
         };
 
@@ -132,7 +129,7 @@ const Advisor: React.FC = () => {
         const errorMsg: Message = {
             id: crypto.randomUUID(),
             role: 'model',
-            content: "Ops! Tive um problema ao conectar com minha inteligência. Verifique sua chave de API ou tente novamente.",
+            content: "Ops! Tive um problema ao conectar com minha inteligência. Tente novamente.",
             timestamp: new Date()
         };
         setMessages(prev => [...prev, errorMsg]);
