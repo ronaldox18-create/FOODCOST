@@ -1,15 +1,28 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize the client with the API key using Vite's import.meta.env
-// fallback to empty string to prevent crash on initialization if key is missing
-const apiKey = import.meta.env.VITE_API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+// Função segura para obter a chave da API sem quebrar a aplicação
+const getApiKey = () => {
+  try {
+    // Tenta ler do import.meta.env (padrão Vite)
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      return import.meta.env.VITE_API_KEY || '';
+    }
+  } catch (e) {
+    console.warn("Ambiente não suporta import.meta.env");
+  }
+  return '';
+};
+
+const apiKey = getApiKey();
+
+// Inicializa o cliente apenas se tiver chave, ou cria um dummy para evitar crash no load
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export const askAI = async (prompt: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
-  if (!apiKey) {
-    console.error("API Key is missing. Please set VITE_API_KEY in your environment variables.");
-    return "Erro de configuração: Chave da API não encontrada. Verifique as configurações do sistema.";
+  if (!ai) {
+    console.error("API Key da IA não encontrada. Configure VITE_API_KEY no painel do Cloudflare/Netlify.");
+    return "⚠️ Erro de Configuração: Chave da Inteligência Artificial não encontrada. Por favor, avise o administrador do sistema.";
   }
 
   try {
@@ -21,6 +34,6 @@ export const askAI = async (prompt: string, model: string = 'gemini-2.5-flash'):
     return response.text || "";
   } catch (error) {
     console.error("AI Request Failed:", error);
-    return "Desculpe, ocorreu um erro ao processar sua solicitação com a IA. Tente novamente em instantes.";
+    return "Desculpe, a IA está indisponível no momento. Tente novamente mais tarde.";
   }
 };
