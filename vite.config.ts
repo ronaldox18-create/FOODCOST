@@ -20,14 +20,13 @@ export default defineConfig(({ mode }) => {
       'process.env': {}
     },
     build: {
-      chunkSizeWarningLimit: 1000, // Aumenta limite para 1MB
+      chunkSizeWarningLimit: 1600,
       rollupOptions: {
         output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom', 'react-router-dom'],
-            charts: ['recharts'],
-            supabase: ['@supabase/supabase-js'],
-            ui: ['lucide-react']
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              return 'vendor';
+            }
           }
         }
       }
